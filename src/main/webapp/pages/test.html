@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+
+    <link rel="stylesheet" type="text/css" href="css/style.css">
+    <script src="//code.jquery.com/jquery-1.9.1.js"></script>
+    <script src="//code.jquery.com/ui/1.10.4/jquery-ui.js"></script>
+</head>
+<body>
+<div id="divContentLeftMenu">
+    <div id="btn_linetype" class="divMenuBtn btn-default btn">
+        连线类型：
+        　　<select id="sel_linetype" style="width:80px;height:20px">
+        　　　　<option value="2">直线</option>
+        　　　　<option value="1">折线</option>
+        　　　　<option value="3">曲线</option>
+        　　</select>
+    </div>
+
+    <div class="sidebar-menu" id="divSidebar">
+        <a href="#plantmodel" onclick="Resize()" class="nav-header menu-first collapsed" data-toggle="collapse">工厂模型</a>
+        <ul id="plantmodel" class="nav nav-list collapse menu-second">
+        </ul>
+        <a href="#artlinemodel" onclick="Resize()" class="nav-header menu-first collapsed" data-toggle="collapse">工艺段模型</a>
+        <ul id="artlinemodel" class="nav nav-list collapse menu-second">
+            <li>
+                <a href="#">
+                    <div class="node radius" id="node4" dbtype="DTO_TM_ART_LINE">
+                        <label>工段</label>
+                    </div>
+                </a>
+            </li>
+            <li>
+                <a href="#">
+                    <div class="node" id="node5" dbtype="DTO_TM_ULOC">
+                        <label>工位</label>
+                    </div>
+                </a>
+            </li>
+        </ul>
+    </div>
+</div>
+<div id="divCenter"></div>
+<script src="external/jquery/jquery.js"></script>
+<script src="js/jquery-ui.js"></script>
+<script src="js/jquery.jsPlumb-1.4.0-all.js"></script>
+<script src="js/html2canvas.js"></script>
+<script type="text/javascript">
+    //全局的空心圆端点样式设置
+    var hollowCircle = {
+        DragOptions: { cursor: 'pointer', zIndex: 2000 },
+        endpoint: ["Dot", { radius: 7 }],  //端点的形状
+        connectorStyle: connectorPaintStyle,//连接线的颜色，大小样式
+        connectorHoverStyle: connectorHoverStyle,
+        paintStyle: {
+            strokeStyle: "#1e8151",
+            fillStyle: "transparent",
+            radius: 5,
+            lineWidth: 2
+        },        //端点的颜色样式
+        //anchor: "AutoDefault",
+        isSource: true,    //是否可以拖动（作为连线起点）
+        connector: ["Straight", { stub: [0, 0], gap: 10, cornerRadius: 5, alwaysRespectStubs: true }],  //连接线的样式种类有[Bezier],[Flowchart],[StateMachine ],[Straight ]
+        isTarget: true,    //是否可以放置（连线终点）
+        maxConnections: -1,    // 设置连接点最多可以连接几条线
+        connectorOverlays: [["Arrow", { width: 10, length: 10, location: 1 }]]
+    };
+    //页面初始化完成之后
+    $(function () {
+        //连线样式下拉框的change事件
+        $("#sel_linetype").change(function () {
+            var strlinetype = "";
+            var strlinecolor = "";
+            //设置新添加元素的节点的连线样式
+            //直线的样式和样色
+            if ($(this).val() == "1") {
+                strlinetype = "Flowchart";
+                strlinecolor = "red";
+                hollowCircle.connector = ["Flowchart", { stub: [0, 0], gap: 10, cornerRadius: 5, alwaysRespectStubs: true }];
+            }
+            //折线的样式和颜色
+            else if ($(this).val() == "2") {
+                strlinetype = "Straight";
+                strlinecolor = "green";
+                hollowCircle.connector = ["Straight", { stub: [0, 0], gap: 10, cornerRadius: 5, alwaysRespectStubs: true }];
+            }
+            //曲线的样式和颜色
+            else if ($(this).val() == "3") {
+                strlinetype = "Bezier";
+                strlinecolor = "orange";
+                hollowCircle.connector = ["Bezier", { stub: [0, 0], gap: 10, cornerRadius: 5, alwaysRespectStubs: true }];
+            }
+            //设置已经存在的所有的连接点的连线样式
+            var arrnode = $("#divCenter").find(".node");
+            for (var i = 0; i < arrnode.length; i++) {
+                var arrendpoints = jsPlumb.getEndpoints($(arrnode[i]).attr("id"));
+                if (arrendpoints == undefined || arrendpoints == null) {
+                    return;
+                }
+                var oconnector = arrendpoints[0].connector;
+                if (oconnector == null || oconnector == undefined) {
+                    return;
+                }
+                oconnector[0] = strlinetype;
+                var oconnectstyle = arrendpoints[0].connectorStyle;
+                if (oconnectstyle == null || oconnectstyle == undefined) {
+                    return;
+                }
+                oconnectstyle.strokeStyle = strlinecolor;
+            }
+        });
+    });
+    $(function(){
+        //左边区域的draggable事件
+        $("#divContentLeftMenu .node").draggable({
+            helper: "clone",
+            scope: "plant"
+        });
+
+        //中间拖拽区的drop事件
+        $("#divCenter").droppable({
+            scope: "plant",
+            drop: function (event, ui) {
+                // 创建工厂模型到拖拽区
+                CreateModel(ui, $(this));
+            }
+        });
+    });
+
+    function CreateModel(ui, selector) {
+        //1.1 添加html模型
+        var modelid = $(ui.draggable).attr("id");
+        i++;
+        var id = modelid + i;
+        var cur_css = modelid;
+        var type = $(ui.helper).attr("dbtype");
+        $(selector).append('<div class="node ' + cur_css + '" id="' + id + '" dbtype="' + type + '" parentid="' + $(selector).attr("id") + '" onclick="oInitElement.GetPropertiesByType(\'' + type + '\',this)" ondblclick="InitStation().DbClick(\'' + type + '\',this)" >' + $(ui.helper).html() + '</div>');
+        var left = parseInt(ui.offset.left - $(selector).offset().left);
+        var top = parseInt(ui.offset.top - $(selector).offset().top);
+        $("#" + id).css("left", left).css("top", top);
+        //jsPlumb.setContainer($("#divCenter"));
+        //1.2 添加连接点
+        jsPlumb.addEndpoint(id, { anchors: "RightMiddle" }, hollowCircle);
+        jsPlumb.addEndpoint(id, { anchors: "LeftMiddle" }, hollowCircle);
+        jsPlumb.addEndpoint(id, { anchors: "TopCenter" }, hollowCircle);
+        jsPlumb.addEndpoint(id, { anchors: "BottomCenter" }, hollowCircle);
+        jsPlumb.draggable(id);
+
+        //1.3 注册实体可draggable和resizable
+        $("#" + id).draggable({
+            containment: "parent",
+            start: function () {
+                startMove();
+            },
+            drag: function (event, ui) {
+                MoveSelectDiv(event, ui, id);
+                jsPlumb.repaintEverything();
+            },
+            stop: function () {
+                jsPlumb.repaintEverything();
+            }
+        });
+
+        $("#" + id).resizable({
+            resize: function () {
+                jsPlumb.repaintEverything();
+            },
+            stop: function () {
+                jsPlumb.repaintEverything();
+                //oInitElement.SendPropRequest("DTO_TM_PLANT", $(this));
+            }
+        });
+        return id;
+    };
+    //基本连接线样式
+    var connectorPaintStyle = {
+        strokeStyle: "#1e8151",
+        fillStyle: "transparent",
+        radius: 5,
+        lineWidth: 2
+    };
+    // 鼠标悬浮在连接线上的样式
+    var connectorHoverStyle = {
+        lineWidth: 3,
+        strokeStyle: "#216477",
+        outlineWidth: 2,
+        outlineColor: "white"
+    };
+    var endpointHoverStyle = {
+        fillStyle: "#216477",
+        strokeStyle: "#216477"
+    };
+    //空心圆端点样式设置
+    var hollowCircle = {
+        DragOptions: { cursor: 'pointer', zIndex: 2000 },
+        endpoint: ["Dot", { radius: 7 }],  //端点的形状
+        connectorStyle: connectorPaintStyle,//连接线的颜色，大小样式
+        connectorHoverStyle: connectorHoverStyle,
+        paintStyle: {
+            strokeStyle: "#1e8151",
+            fillStyle: "transparent",
+            radius: 5,
+            lineWidth: 2
+        },        //端点的颜色样式
+        //anchor: "AutoDefault",
+        isSource: true,    //是否可以拖动（作为连线起点）
+        connector: ["Straight", { stub: [0, 0], gap: 10, cornerRadius: 5, alwaysRespectStubs: true }],  //连接线的样式种类有[Bezier],[Flowchart],[StateMachine ],[Straight ]
+        isTarget: true,    //是否可以放置（连线终点）
+        maxConnections: -1,    // 设置连接点最多可以连接几条线
+        connectorOverlays: [["Arrow", { width: 10, length: 10, location: 1 }]]
+    };
+</script>
+</body>
+</html>
